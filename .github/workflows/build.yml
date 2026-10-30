@@ -1,0 +1,45 @@
+name: Build EntityCulling Forge 1.21.11
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Clone official sources (tr7zw)
+        run: |
+          for r in TRansition TRender EntityCulling; do
+            git clone --depth 1 https://github.com/tr7zw/$r.git $r
+            sed -i 's/"1.21.11-neoforge",/"1.21.11-neoforge",\n        "1.21.11-forge",/' $r/legacy.json
+          done
+      - name: Build libraries and mod
+        run: |
+          set -o pipefail
+          for r in TRansition TRender EntityCulling; do
+            cd $r
+            chmod +x gradlecw gradlew 2>/dev/null || true
+            ./gradlecw 2>&1 | tee -a ../build-log.txt
+            chmod +x gradlew
+            ./gradlew :1.21.11-forge:build :1.21.11-forge:publishToMavenLocal --no-daemon 2>&1 | tee -a ../build-log.txt
+            cd ..
+          done
+      - name: Checksums
+        if: success()
+        run: |
+          mkdir out
+          cp EntityCulling/versions/1.21.11-forge/build/libs/*.jar out/ || true
+          rm -f out/*-sources.jar out/*-dev*.jar
+          cd out && sha256sum *.jar | tee SHA256.txt
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: EntityCulling-Forge-1.21.11
+          path: out/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build-log.txt
